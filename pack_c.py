@@ -8,6 +8,7 @@ import contextlib
 import itertools
 import re
 import shlex
+import zlib
 
 
 parser = argparse.ArgumentParser(
@@ -40,10 +41,17 @@ parser.add_argument(
     help="Additional flags for gcc",
 )
 
+parser.add_argument(
+    "-c", "--compress",
+    action="store_true",
+    help="Compress the function code with zlib",
+)
+
 
 env = jinja2.Environment()
-env .filters["repr"] = repr
-env .filters["hex_4"] = lambda s: f"{s:#x}"
+env.filters["repr"] = repr
+env.filters["hex_4"] = lambda s: f"{s:#x}"
+env.filters["zlib_compress"] = zlib.compress
 
 
 TEMPLATE_PY: typing.Final[jinja2.Template] = env.from_string("""\
@@ -53,10 +61,19 @@ import sys
 import ctypes
 import struct
 import mmap
+{%- if compress %}
+import zlib
+{%- endif %}
 
 
 func_code: bytearray = bytearray(
+    {% if compress -%}
+    zlib.decompress(
+        {{ func_code | zlib_compress | repr }}
+    )
+    {%- else -%}
     {{ func_code | repr }}
+    {%- endif %}
 )
 
 libc_relocs: dict[str, int] = dict(
@@ -77,7 +94,7 @@ for name, offs in libc_relocs.items():
     # print(f"{name} -> {ctypes_func_addr:#x}")
     del ctypes_func, ctypes_func_addr
 
-assert len(func_code) <= 8 * mmap.PAGESIZE, "Payload too big"
+assert len(func_code) <= 32 * mmap.PAGESIZE, "Payload too big"
 
 # print(func_code.hex())
 
@@ -105,7 +122,7 @@ def main():
     if not args.output:
         args.output = args.c_source.with_suffix(".py")
     
-    assert args.c_source.suffix == ".c", "Only C files are supported"
+    # assert args.c_source.suffix == ".c", "Only C files are supported"
     
     with contextlib.ExitStack() as stack:
         source_path: pathlib.Path = args.c_source
@@ -116,8 +133,10 @@ def main():
         stack.callback(lambda: object_path.unlink(missing_ok=True))
         subprocess.check_call([
             "gcc", f"{source_path}", "-o", f"{object_path}",
+            "--std=c17", "-m64", "-finline-functions",
             "-Wno-builtin-declaration-mismatch", "-Wall", "-Wextra", "-Wno-unknown-pragmas",
             "-nostartfiles", "-nolibc", "-static-libgcc", "-fpie", "-ffreestanding",
+            "-march=native", "-mmemcpy-strategy=rep_8byte:-1:noalign",
             "-T", f"{LINKER_SCRIPT}",
             "-O3",
             *shlex.split(args.cflags),
@@ -135,6 +154,7 @@ def main():
 
     with args.output.open("w") as f:
         TEMPLATE_PY.stream(
+            compress=args.compress,
             func_code=func_code,
             libc_relocs=libc_relocs,
             func_offs=func_offs,

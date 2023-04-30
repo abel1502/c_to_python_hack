@@ -5,15 +5,26 @@
 #pragma region 'Imported' functions
 #define IMPORTED __attribute__((section(".libc-imp")))
 
-IMPORTED void *(*volatile malloc)(size_t size) = NULL;
-IMPORTED void *(*volatile realloc)(void *ptr, size_t size) = NULL;
-IMPORTED void (*volatile free)(void *ptr) = NULL;
-IMPORTED void *(*volatile memcpy)(void *dest, void *src, size_t count) = NULL;
+IMPORTED void *(*const volatile malloc)(size_t size) = NULL;
+IMPORTED void *(*const volatile realloc)(void *ptr, size_t size) = NULL;
+IMPORTED void (*const volatile free)(void *ptr) = NULL;
+// IMPORTED void *(*const volatile memcpy)(void *dest, void *src, size_t count) = NULL;
 // #define memcpy __builtin_memcpy
-IMPORTED int (*volatile printf)(const char *format, ...) = NULL;
-IMPORTED int (*volatile scanf)(const char *format, ...) = NULL;
+IMPORTED int (*const volatile printf)(const char *format, ...) = NULL;
+IMPORTED int (*const volatile scanf)(const char *format, ...) = NULL;
 
 #undef IMPORTED
+
+// Hopefully faster...
+static inline void *memcpy(void *dest, void *src, size_t count) {
+    uint32_t *dest_c = dest;
+    uint32_t *src_c = src;
+    count /= sizeof(uint32_t);
+    for (size_t i = 0; i < count; ++i) {
+        dest_c[i] = src_c[i];
+    }
+    return dest;
+}
 #pragma endregion
 
 
@@ -88,14 +99,14 @@ struct vector {
 
 
 #pragma region Input
-inline int32_t read_int32() {
+static inline int32_t read_int32() {
     int32_t value;
     scanf("%d", &value);
     return value;
 }
 
 
-inline int64_t read_int64() {
+static inline int64_t read_int64() {
     int64_t value;
     scanf("%lld", &value);
     return value;
@@ -107,15 +118,15 @@ inline int64_t read_int64() {
 #define LOG_NODES_CNT 20
 
 
-int32_t nodes_cnt, ops_cnt;
+static int32_t nodes_cnt, ops_cnt;
 
-int32_t *dsu_parents;
-struct vector *dsu_items;
+static int32_t *dsu_parents;
+static struct vector *dsu_items;
 
-int32_t *depths;
-int64_t *costs;
-int32_t *nexts;
-struct vector *neighbours;
+static int32_t *depths;
+static int64_t *costs;
+static int32_t *nexts;
+static struct vector *neighbours;
 
 
 struct neighbour {
@@ -126,31 +137,31 @@ struct neighbour {
 
 
 #pragma region DSU
-void dsu_init() {
+static inline void dsu_init() {
     dsu_parents = malloc(sizeof(*dsu_parents) * nodes_cnt);
     dsu_items = malloc(sizeof(*dsu_items) * nodes_cnt);
 
     for (int32_t i = 0; i < nodes_cnt; ++i) {
         dsu_parents[i] = i;
-        dsu_items[i] = VECTOR_NEW(int32_t, 1);
+        dsu_items[i] = VECTOR_NEW(int32_t, 8);
         VECTOR_PUSH_BACK(dsu_items[i], int32_t, i);
     }
 }
 
 
-void dsu_free() {
-    free(dsu_parents);
-    dsu_parents = NULL;
+// static inline void dsu_free() {
+//     free(dsu_parents);
+//     dsu_parents = NULL;
 
-    for (int32_t i = 0; i < nodes_cnt; ++i) {
-        VECTOR_FREE(dsu_items[i]);
-    }
-    free(dsu_items);
-    dsu_items = NULL;
-}
+//     for (int32_t i = 0; i < nodes_cnt; ++i) {
+//         VECTOR_FREE(dsu_items[i]);
+//     }
+//     free(dsu_items);
+//     dsu_items = NULL;
+// }
 
 
-int32_t dsu_root(int32_t node) {
+static inline int32_t dsu_root(int32_t node) {
     if (dsu_parents[node] == node) {
         return node;
     }
@@ -166,7 +177,7 @@ struct dsu_join_result {
     int32_t root_b;
 };
 
-struct dsu_join_result dsu_join(int32_t node_a, int32_t node_b) {
+static inline struct dsu_join_result dsu_join(int32_t node_a, int32_t node_b) {
     int32_t root_a = dsu_root(node_a);
     int32_t root_b = dsu_root(node_b);
 
@@ -207,7 +218,7 @@ struct dsu_join_result dsu_join(int32_t node_a, int32_t node_b) {
 
 
 #pragma region Task API
-void dfs_init(int32_t parent, int32_t node, int64_t cost) {
+static inline void dfs_init(int32_t parent, int32_t node, int64_t cost) {
     depths[node] = depths[parent] + 1;
     ITEM_2D(nexts, 0, node) = parent;
     ITEM_2D(costs, 0, node) = cost;
@@ -223,7 +234,7 @@ void dfs_init(int32_t parent, int32_t node, int64_t cost) {
 }
 
 
-void add_edge(int32_t node_a, int32_t node_b, int64_t cost) {
+static inline void add_edge(int32_t node_a, int32_t node_b, int64_t cost) {
     struct dsu_join_result join_result = dsu_join(node_a, node_b);
 
     dfs_init(join_result.node_a, join_result.node_b, cost);
@@ -261,7 +272,7 @@ void add_edge(int32_t node_a, int32_t node_b, int64_t cost) {
 }
 
 
-int64_t eval_path(int32_t node_a, int32_t node_b) {
+static inline int64_t eval_path(int32_t node_a, int32_t node_b) {
     if (dsu_root(node_a) != dsu_root(node_b)) {
         return -1;
     }
@@ -325,7 +336,7 @@ void solve() {
 
     for (int32_t node = 0; node < nodes_cnt; ++node) {
         depths[node] = 0;
-        neighbours[node] = VECTOR_NEW(struct neighbour, 4);
+        neighbours[node] = VECTOR_NEW(struct neighbour, 8);
 
         for (int32_t level = 0; level < LOG_NODES_CNT; ++level) {
             ITEM_2D(nexts, level, node) = -1;
