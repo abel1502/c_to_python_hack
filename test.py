@@ -29,7 +29,8 @@ small_inputs: pathlib.Path = pathlib.Path(__file__).parent / "small_input.txt"
 # generate(small_inputs, 2000, 2000)
 
 
-inputs = pathlib.Path(__file__).parent / "input.txt"
+# inputs = pathlib.Path(__file__).parent / "input.txt"
+inputs = big_inputs
 
 
 def compare() -> bool:
@@ -41,7 +42,7 @@ def compare() -> bool:
     ).split()
     
     my_result: str = subprocess.check_output(
-        ["python", "tmp.py"],
+        ["python", "hack.py"],
         stdin=open(inputs, "r", encoding="utf-8"),
         encoding="utf-8",
     ).split()
@@ -60,8 +61,9 @@ compare()
 
 def profile() -> None:
     results: str = subprocess.check_output(
-        ["python", "-m", "cProfile", "-s", "cumulative", "tmp.py"],
-        # stdin=open(inputs, "r", encoding="utf-8"),
+        ["python", "-m", "cProfile", "-s", "cumulative", "hack.py", "-o", "profile_results.prof"],
+        stdin=open(inputs, "r", encoding="utf-8"),
+        stdout=subprocess.DEVNULL,
         encoding="utf-8",
     )
     
