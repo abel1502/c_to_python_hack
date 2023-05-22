@@ -125,51 +125,52 @@ def main():
 
 
     # @numba.njit('void(int32[:, :], int64[:, :], int32[:])', parallel=True, nogil=True)
-    # def _update_nexts_costs(nexts: np.ndarray, costs: np.ndarray, nodes: np.ndarray) -> None:
-    #     for level in range(1, LOG_NODES_CNT):
-    #         for node_idx in numba.prange(len(nodes)):
-    #             node = nodes[node_idx]
+    def _update_nexts_costs(nexts: np.ndarray, costs: np.ndarray, nodes: np.ndarray) -> None:
+        for level in range(1, LOG_NODES_CNT):
+            # for node_idx in numba.prange(len(nodes)):
+            for node_idx in range(len(nodes)):
+                node = nodes[node_idx]
                 
-    #             prev_node = nexts[level - 1, node]
+                prev_node = nexts[level - 1, node]
                 
-    #             if prev_node == -1:
-    #                 nexts[level, node] = -1
-    #                 continue
+                if prev_node == -1:
+                    nexts[level, node] = -1
+                    continue
                 
-    #             nexts[level, node] = nexts[level - 1, prev_node]
-    #             costs[level, node] = costs[level - 1, node] + costs[level - 1, prev_node]
+                nexts[level, node] = nexts[level - 1, prev_node]
+                costs[level, node] = costs[level - 1, node] + costs[level - 1, prev_node]
 
     # builtins.print(pickle.dumps(_update_nexts_costs))
     # exit()
     # _update_nexts_costs = pickle.loads(b'')
 
-    _func_code: bytes = (
-        b'M\x85\xc0\x0f\x84\x85\x00\x00\x00AVI\x89\xd3N\x8d\x14\x82E1\xc9AUATU\xbd\x13'
-        b'\x00\x00\x00SH\x89\xcb\x0f\x1fD\x00\x00M\x89\xc8L\x89\xd9I\x01\xd9\xeb%\x0f'
-        b'\x1fD\x00\x00L\x01\xc0H\x83\xc1\x04D\x8b4\x87H\x8b\x04\xc6J\x03\x04\xe6E'
-        b'\x89u\x00H\x89\x04\xd6I9\xcat(Hc\x11N\x8d$\x02L\x01\xcaJc\x04\xa7L\x8d'
-        b',\x97\x83\xf8\xffu\xc9H\x83\xc1\x04A\xc7E\x00\xff\xff\xff\xffI9\xcau\xd8'
-        b'\x83\xed\x01u\xa3[]A\\A]A^\xc3\xc3'
-    )
+    # _func_code: bytes = (
+    #     b'M\x85\xc0\x0f\x84\x85\x00\x00\x00AVI\x89\xd3N\x8d\x14\x82E1\xc9AUATU\xbd\x13'
+    #     b'\x00\x00\x00SH\x89\xcb\x0f\x1fD\x00\x00M\x89\xc8L\x89\xd9I\x01\xd9\xeb%\x0f'
+    #     b'\x1fD\x00\x00L\x01\xc0H\x83\xc1\x04D\x8b4\x87H\x8b\x04\xc6J\x03\x04\xe6E'
+    #     b'\x89u\x00H\x89\x04\xd6I9\xcat(Hc\x11N\x8d$\x02L\x01\xcaJc\x04\xa7L\x8d'
+    #     b',\x97\x83\xf8\xffu\xc9H\x83\xc1\x04A\xc7E\x00\xff\xff\xff\xffI9\xcau\xd8'
+    #     b'\x83\xed\x01u\xa3[]A\\A]A^\xc3\xc3'
+    # )
 
-    assert len(_func_code) <= mmap.PAGESIZE
+    # assert len(_func_code) <= mmap.PAGESIZE
     
-    _func_buf = mmap.mmap(-1, mmap.PAGESIZE, prot=mmap.PROT_READ | mmap.PROT_WRITE | mmap.PROT_EXEC)
-    _func_buf.write(_func_code)
-    _func_ptr = ctypes.c_void_p.from_buffer(_func_buf)
-    _func_type = ctypes.CFUNCTYPE(
-        None,
-        ndpointer(ctypes.c_int32, flags="C,W,O"),
-        ndpointer(ctypes.c_int64, flags="C,W,O"),
-        ndpointer(ctypes.c_int32, flags="C"),
-        ctypes.c_size_t,
-        ctypes.c_size_t
-    )
-    _func = _func_type(ctypes.addressof(_func_ptr))
+    # _func_buf = mmap.mmap(-1, mmap.PAGESIZE, prot=mmap.PROT_READ | mmap.PROT_WRITE | mmap.PROT_EXEC)
+    # _func_buf.write(_func_code)
+    # _func_ptr = ctypes.c_void_p.from_buffer(_func_buf)
+    # _func_type = ctypes.CFUNCTYPE(
+    #     None,
+    #     ndpointer(ctypes.c_int32, flags="C,W,O"),
+    #     ndpointer(ctypes.c_int64, flags="C,W,O"),
+    #     ndpointer(ctypes.c_int32, flags="C"),
+    #     ctypes.c_size_t,
+    #     ctypes.c_size_t
+    # )
+    # _func = _func_type(ctypes.addressof(_func_ptr))
 
 
-    def _update_nexts_costs(nexts: np.ndarray, costs: np.ndarray, nodes: np.ndarray, len_nodes: int) -> None:
-        _func(nexts, costs, nodes, nodes_cnt, len_nodes)
+    # def _update_nexts_costs(nexts: np.ndarray, costs: np.ndarray, nodes: np.ndarray, len_nodes: int) -> None:
+    #     _func(nexts, costs, nodes, nodes_cnt, len_nodes)
 
 
     def add_edge(node_a: int, node_b: int, cost: int) -> None:
