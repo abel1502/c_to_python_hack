@@ -125,10 +125,10 @@ def main():
 
 
     # @numba.njit('void(int32[:, :], int64[:, :], int32[:])', parallel=True, nogil=True)
-    def _update_nexts_costs(nexts: np.ndarray, costs: np.ndarray, nodes: np.ndarray) -> None:
+    def _update_nexts_costs(nexts: np.ndarray, costs: np.ndarray, nodes: np.ndarray, len_nodes: int) -> None:
         for level in range(1, LOG_NODES_CNT):
             # for node_idx in numba.prange(len(nodes)):
-            for node_idx in range(len(nodes)):
+            for node_idx in range(len_nodes):
                 node = nodes[node_idx]
                 
                 prev_node = nexts[level - 1, node]
