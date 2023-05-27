@@ -1,7 +1,6 @@
 from __future__ import annotations
 import typing
 import pathlib
-import subprocess
 import time
 import abc
 
@@ -36,6 +35,12 @@ def generate(gen: typing.Type[InputGenerator], file: pathlib.Path, *args, **kwar
 
 
 class DumbInputGenerator(InputGenerator):
+    """
+    Simply provides random inputs.
+    
+    No thoughts, head empty.
+    """
+    
     def generate(self) -> InputGenerator:
         for _ in range(self.q):
             self.add_line(list(map(str, self.pick_generator()())))
@@ -68,32 +73,12 @@ class DumbInputGenerator(InputGenerator):
         )
 
 
-class SmartInputGenerator(DumbInputGenerator):
-    # TODO: Embed a complete solution in order to properly transform indices
-
-    def __init__(self, n: int, q: int):
-        super().__init__(n, q)
-
-        # TODO: Init solution vars
-    
-    def add_line(self, args: typing.Sequence[str]) -> None:
-        # TODO: update the solution's internal state
-
-        super().add_line(args)
-
-    def gen_good_eval(self) -> typing.Sequence[typing.Any]:
-        # TODO: consult the solution's internal state
-
-        raise NotImplementedError()
-    
-    def pick_generator(self) -> typing.Callable[[], typing.Sequence[typing.Any]]:
-        return np.random.choice(
-            [self.gen_add, self.gen_eval, self.gen_good_eval],
-            p=[0.3, 0.2, 0.5],
-        )
-
-
 class ImprovisedInputGenerator(DumbInputGenerator):
+    """
+    Tries to add a lot of edges first, hoping that
+    then the queries are likely to succeed.
+    """
+    
     def generate(self) -> InputGenerator:
         q: int = self.q
 
@@ -117,9 +102,91 @@ class ImprovisedInputGenerator(DumbInputGenerator):
         )
 
 
+class SmartInputGenerator(DumbInputGenerator):
+    """
+    Maintains a DSU and more often than not generates
+    queries with non-trivial answers.
+    
+    To do so without maintating a complete solution,
+    it uses a trick that after a trivial (-1) answer,
+    the obfuscation is neutralized, so we can choose
+    the nodes for the next request freely.
+    
+    Essentially, this generator yields either edge-addition
+    requests, or pairs of a query with a non-trivial answer
+    and a query with a trivial answer.
+    """
+    
+    RETRIES: typing.Final[int] = 2000
+    
+    dsu: np.ndarray
+    failures: int
+
+    def __init__(self, n: int, q: int):
+        super().__init__(n, q)
+        
+        self.dsu = np.arange(n, dtype=np.int32)
+        self.failures = 0
+    
+    def generate(self) -> InputGenerator:
+        while len(self.data) < self.q + 1:
+            self.add_line(list(map(str, self.pick_generator()())))
+        
+        self.data = self.data[:self.q + 1]
+        
+        print(f"Failed {self.failures} times out of {self.q} requests")
+        
+        return self
+
+    def dsu_root(self, node: int) -> int:
+        if self.dsu[node] == node:
+            return node
+        
+        root: int = self.dsu_root(self.dsu[node])
+        self.dsu[node] = root
+        return root
+    
+    def gen_add(self) -> typing.Sequence[typing.Any]:
+        for _ in range(self.RETRIES):
+            op, i, j, cost = super().gen_add()
+            
+            if self.dsu_root(i - 1) != self.dsu_root(j - 1):
+                self.dsu[self.dsu_root(i - 1)] = self.dsu_root(j - 1)
+                
+                return (op, i, j, cost)
+        
+        raise RuntimeError("Failed to generate a valid edge-addition request")
+
+    def _gen_good_eval(self) -> typing.Sequence[typing.Any]:
+        for _ in range(self.RETRIES):
+            op, i, j = super().gen_eval()
+            
+            if self.dsu_root(i - 1) == self.dsu_root(j - 1):
+                return (op, i, j)
+        
+        raise RuntimeError("Failed to generate a good evaluation request")
+    
+    def gen_eval_pair(self) -> typing.Sequence[typing.Any]:
+        try:
+            self.add_line(list(map(str, self._gen_good_eval())))
+        except RuntimeError:
+            # print("Scheme failed, falling back to dumb generation")
+            self.failures += 1
+        
+        # Note: in case of success, we just hope this won't randomly strike
+        #       a non-trivial query, since that would mess us up a bit...
+        return self.gen_eval()
+    
+    def pick_generator(self) -> typing.Callable[[], typing.Sequence[typing.Any]]:
+        return np.random.choice(
+            [self.gen_add, self.gen_eval, self.gen_eval_pair],
+            p=[0.4, 0.2, 0.4],
+        )
+
+
 big_inputs: pathlib.Path = pathlib.Path(__file__).parent / "big_input.txt"
 small_inputs: pathlib.Path = pathlib.Path(__file__).parent / "small_input.txt"
 
-gen_cls: typing.Type[InputGenerator] = ImprovisedInputGenerator
+gen_cls: typing.Type[InputGenerator] = SmartInputGenerator
 # generate(gen_cls, small_inputs, 2000, 2000)
 generate(gen_cls, big_inputs, 160000, 200000)
